@@ -1,0 +1,85 @@
+- Plug is a specification for composable modules in between web applications
+- It is also an abstraction layer for connection adapters of different web servers (unifies the concept of a "connection" that we operate on)
+- We interact with plugs at every step of the request life-cycle
+- The core Phoenix components like Endpoints, Routers, and Controllers are all just Plugs internally (they all accept luugs also)
+
+FUNCTION PLUGS------------------------------------------------------------------------------
+- In order to act as a Plug, a function needs to 
+    - Accept a connection struct (%Plug.Conn{}) and options as input
+    - Return a connection struct as output
+- Function plugs are plugged by passing the function name as an atom. (i.e. 'plug :introspect')
+
+MODULE PLUGS--------------------------------------------------------------------------------
+- Let us define a connection transformation in a modules
+- Module only needs to implement 2 functions:
+    - init/1 which initializes any arguments or options to be passed to call/2
+    - call/2 which carries out the connection transformation (call/2 is just a function plug that we saw earlier)
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ENDPOINT PLUGS--------------------------------------------------------------------------------
+- Endpoints organize all the plugs common to every request, and apply them before dispatching into the router with its custom pipelines
+- We added a plug to the endpoint like this:
+
+defmodule HelloWeb.Endpoint do
+  ...
+
+  plug :introspect
+  plug HelloWeb.Router
+
+- Default Endpoint plugs:
+Plug.Static - serves static assets. Since this plug comes before the logger, serving of static assets is not logged
+
+Phoenix.CodeReloader - a plug that enables code reloading for all entries in the web directory. It is configured directly in the Phoenix application
+
+Plug.RequestId - generates a unique request id for each request.
+
+Plug.Telemetry - adds instrumentation points so Phoenix can log the request path, status code and request time by default.
+
+Plug.Parsers - parses the request body when a known parser is available. By default parsers parse urlencoded, multipart and json (with jason). The request body is left untouched when the request content-type cannot be parsed
+
+Plug.MethodOverride - converts the request method to PUT, PATCH or DELETE for POST requests with a valid _method parameter
+
+Plug.Head - converts HEAD requests to GET requests and strips the response body
+
+Plug.Session - a plug that sets up session management. Note that fetch_session/2 must still be explicitly called before using the session as this Plug just sets up how the session is fetched
+
+- There is also a conditional blck in the middle of the endpoint, 
+- This block is only executed in development and enables:
+    - Live reloading (if you change a CSS file, they are updated in-browser without refreshing the page)
+    - Code reloading (so we can see changes to our application without restarting the server
+    - Check repo status (which makes sure our database is up to date, raising readable and actionable error otherwise)
+
+
+ROUTER PLUGS--------------------------------------------------------------------------------
+- In the router, we can declare plugs inside pipelines
+- Routes are defined inside scopes and scopes may pipe through multiple pipelines
+- Once a route matches, Phoenix invokes all plugs defined in all pipelines associated to that route
+    - For example, accessing "/" will pipe through the :browser pipeline, consequently invoking all of its plugs:
+
+defmodule HelloWeb.Router do
+  use HelloWeb, :router
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_flash
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug HelloWeb.Plugs.Locale, "en"
+  end
+
+  scope "/", HelloWeb do
+    pipe_through :browser
+
+    get "/", PageController, :index
+  end
+
+  CONTROLLER PLUGS--------------------------------------------------------------------------------
+  - Controller plugs provide a feature that allows us to execute plugs only within certain actions
+  - i.e. the plug below will only be executed for the index action:
+
+  defmodule HelloWeb.HelloController do
+    use HelloWeb, :controller
+
+    plug HelloWeb.Plugs.Locale, "en" when action in [:index]

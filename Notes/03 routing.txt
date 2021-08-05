@@ -1,0 +1,232 @@
+- Routers are the main hub of Phoenix applications
+- Main capabilities:
+    - Match HTTP requests to controller actions
+    - Wire up real-time channel handlers
+    - Define series of pipeline transformations scoped to a set of routes
+- Example route: get "/", PageController, :index
+    - 'get' is  Phoenix macro corresponding to HTTP verb get
+- Pipelines allow a set of plugs to be applied to different sets of routes
+- Use 'mix phx.routes' command to investigate and application's routes (SAMPLE OUTPUT):
+
+    user_path  GET     /users           HelloWeb.UserController :index # GET request to /users will invoke the index action to show all the users.
+    user_path  GET     /users/new       HelloWeb.UserController :edit # GET request to /users/new will invoke the new action to present a form for creating a new user
+    user_path  GET     /users/:id/      HelloWeb.UserController :new # GET request to /users/:id will invoke the show action with an id to show an individual user identified by that ID
+    user_path  GET     /users/:id/edit  HelloWeb.UserController :show # GET request to /users/:id/edit will invoke the edit action with an ID to retrieve user from data store and present the info in a form for editing
+    user_path  POST    /users           HelloWeb.UserController :create # POST request to /users will invoke the create action to save a new user to the data store.
+    user_path  PATCH   /users/:id       HelloWeb.UserController :update # PATCH request to /users/:id will invoke the update action with an ID to save the updated user to the data store.
+            PUT     /users/:id       HelloWeb.UserController :update # PUT request to /users/:id will also invoke the update action with an ID to save the updated user to the data store.
+    user_path  DELETE  /users/:id       HelloWeb.UserController :delete # DELETE request to /users/:id will invoke the delete action with an ID to remove the individual user from the data store
+
+- We can be selective using the :only and :except options to filter certain actions if we don't need hella routes
+Ex) Read-only posts resource (:only)
+    resources "/posts", PostController, only: [:index, :show]
+
+    mix phx.routes (output):
+    post_path  GET     /posts      HelloWeb.PostController :index
+    post_path  GET     /posts/:id  HelloWeb.PostController :show
+
+Ex) Comments resource (:except)
+    resources "/comments", CommentController, except: [:delete]
+    
+    mix phx.routes (output):
+    comment_path  GET    /comments           HelloWeb.CommentController :index
+    comment_path  GET    /comments/:id/edit  HelloWeb.CommentController :edit
+    comment_path  GET    /comments/new       HelloWeb.CommentController :new
+    comment_path  GET    /comments/:id       HelloWeb.CommentController :show
+    comment_path  POST   /comments           HelloWeb.CommentController :create
+    comment_path  PATCH  /comments/:id       HelloWeb.CommentController :update
+                  PUT    /comments/:id       HelloWeb.CommentController :update
+
+PATH HELPERS----------------------------------------------------------------------------------------------------
+- Functions which are dynamically defined on the Router.Helpers module for an individual application
+- When we call the page_path function on our router helpers with the Endpoint or connection and action as arguments, it returns the path to us
+- Example:
+    iex> HelloWeb.Router.Helpers.page_path(HelloWeb.Endpoint, :index)
+        "/"
+- page_path function can be used in a template to link to the root of the applications:
+    <%= link "Welcome Page!", to: Routes.page_path(@conn, :index) %>
+- Using path helpers makes it easy to ensure our controllers, views and templates are linking to pages our router can actually handle
+
+- Ex) user_path function
+    
+    iex> alias HelloWeb.Router.Helpers, as: Routes
+    iex> alias HelloWeb.Endpoint
+    iex> Routes.user_path(Endpoint, :index)
+        "/users"
+
+    iex> Routes.user_path(Endpoint, :show, 17)
+        "/users/17"
+
+    iex> Routes.user_path(Endpoint, :new)
+        "/users/new"
+
+    iex> Routes.user_path(Endpoint, :create)
+        "/users"
+
+    iex> Routes.user_path(Endpoint, :edit, 37)
+        "/users/37/edit"
+
+    iex> Routes.user_path(Endpoint, :update, 37)
+        "/users/37"
+
+    iex> Routes.user_path(Endpoint, :delete, 17)
+        "/users/17"
+
+- By adding an optional fourth argument of key value pairs, the path helpers will return those pairs in the query string
+    
+    iex> Routes.user_path(Endpoint, :show, 17, admin: true, active: false)
+        "/users/17?admin=true&active=false"
+
+- Can get full url by using 'page_url' instead of 'page_path'
+- _url functions will get the host, port, proxy port, and SSL info needed to construct the full URL from the configuration parameters set for each environment
+    
+    iex> Routes.user_url(Endpoint, :index)
+        "http://localhost:4000/users"
+
+NESTED RESOURCES----------------------------------------------------------------------------------------------------
+- It is possible to nest resources in a Phoenix router
+- Example:
+    -  Say we have a posts resource with a many-to-one relationship with users 
+    - A user can create many posts, and an individual post belongs to only one user 
+    - We can represent that by adding a nested route in 'lib/hello_web/router.ex' like this:
+
+    resources "/users", UserController do
+        resources "/posts", PostController
+    end
+- Running mix phx.routes will output:
+    user_post_path  GET     /users/:user_id/posts           HelloWeb.PostController :index
+    user_post_path  GET     /users/:user_id/posts/:id/edit  HelloWeb.PostController :edit
+    user_post_path  GET     /users/:user_id/posts/new       HelloWeb.PostController :new
+    user_post_path  GET     /users/:user_id/posts/:id       HelloWeb.PostController :show
+    user_post_path  POST    /users/:user_id/posts           HelloWeb.PostController :create
+    user_post_path  PATCH   /users/:user_id/posts/:id       HelloWeb.PostController :update
+                    PUT     /users/:user_id/posts/:id       HelloWeb.PostController :update
+    user_post_path  DELETE  /users/:user_id/posts/:id       HelloWeb.PostController :delete
+
+- When calling path helper functions for nested routes, we will need to pass the IDs in the order they came in the route definition
+- Ex) For the following show route, 42 is the user_id, and 17 is the post_id
+        iex> alias HelloWeb.Endpoint
+        iex> HelloWeb.Router.Helpers.user_post_path(Endpoint, :show, 42, 17)
+        "/users/42/posts/17"
+
+    - If we add a key/val pair to the end of the function call, it's added to the query string
+        iex> HelloWeb.Router.Helpers.user_post_path(Endpoint, :index, 42, active: true)
+        "/users/42/posts?active=true"
+
+SCOPED ROUTES----------------------------------------------------------------------------------------------
+- Scopes are a way to group routes under a common path prefix and scoped set of plugs
+- Good for admin functionality and APIs (especially for versioned APIs)
+
+Ex) Site with user-generated reviews where they first need to be approved by an admin
+    - The paths to the user facing reviews would look like a standard resource:    
+        .../reviews
+        .../reviews/1234
+        .../reviews/1234/edit
+    
+    - The admin review paths could be prefixed with /admin:
+        .../admin/reviews
+        .../admin/reviews/1234
+        .../admin/reviews/1234/edit
+    
+    - Accomplished with a scoped route that sets a path option to /admin:
+    
+        scope "/admin", HelloWeb.Admin do
+            pipe_through :browser
+
+            resources "/reviews", ReviewController
+        end
+
+    - Running mix phx.routes outputs:
+        review_path  GET     /admin/reviews           HelloWeb.Admin.ReviewController :index
+        review_path  GET     /admin/reviews/:id/edit  HelloWeb.Admin.ReviewController :edit
+        review_path  GET     /admin/reviews/new       HelloWeb.Admin.ReviewController :new
+        review_path  GET     /admin/reviews/:id       HelloWeb.Admin.ReviewController :show
+        review_path  POST    /admin/reviews           HelloWeb.Admin.ReviewController :create
+        review_path  PATCH   /admin/reviews/:id       HelloWeb.Admin.ReviewController :update
+                     PUT     /admin/reviews/:id       HelloWeb.Admin.ReviewController :update
+        review_path  DELETE  /admin/reviews/:id       HelloWeb.Admin.ReviewController :delete
+
+    - Since we wanted both user facing and admin routes, we should also include the user faing reviews in our router under the root scope like this
+
+        scope "/", HelloWeb do
+            pipe_through :browser
+
+            ...
+            resources "/reviews", ReviewController
+        end
+    
+    - AND we also want the path helper for the admin routes to be written correctly, so we also define the admin scope with an 'as: :admin' option
+        scope "/admin", HelloWeb.Admin, as: :admin do
+            pipe_through :browser
+
+            resources "/reviews", ReviewController
+        end
+
+    - Running mix phx.routes now outputs:
+        ...
+            review_path  GET     /reviews                        HelloWeb.ReviewController :index
+            review_path  GET     /reviews/:id/edit               HelloWeb.ReviewController :edit
+            review_path  GET     /reviews/new                    HelloWeb.ReviewController :new
+            review_path  GET     /reviews/:id                    HelloWeb.ReviewController :show
+            review_path  POST    /reviews                        HelloWeb.ReviewController :create
+            review_path  PATCH   /reviews/:id                    HelloWeb.ReviewController :update
+                         PUT     /reviews/:id                    HelloWeb.ReviewController :update
+            review_path  DELETE  /reviews/:id                    HelloWeb.ReviewController :delete
+        ...
+        admin_review_path  GET     /admin/reviews                  HelloWeb.Admin.ReviewController :index
+        admin_review_path  GET     /admin/reviews/:id/edit         HelloWeb.Admin.ReviewController :edit
+        admin_review_path  GET     /admin/reviews/new              HelloWeb.Admin.ReviewController :new
+        admin_review_path  GET     /admin/reviews/:id              HelloWeb.Admin.ReviewController :show
+        admin_review_path  POST    /admin/reviews                  HelloWeb.Admin.ReviewController :create
+        admin_review_path  PATCH   /admin/reviews/:id              HelloWeb.Admin.ReviewController :update
+                           PUT     /admin/reviews/:id              HelloWeb.Admin.ReviewController :update
+        admin_review_path  DELETE  /admin/reviews/:id              HelloWeb.Admin.ReviewController :delete
+
+- We can put multiple resources in the same scope:
+    scope "/admin", HelloWeb.Admin, as: :admin do
+        pipe_through :browser
+
+        resources "/images",  ImageController
+        resources "/reviews", ReviewController
+        resources "/users",   UserController
+    end
+
+- We can also use multiple scopes with the same path as long as routes aren't duplicated
+    defmodule HelloWeb.Router do
+    use Phoenix.Router
+    ...
+    scope "/", HelloWeb do
+        pipe_through :browser
+
+        resources "/users", UserController
+    end
+
+    scope "/", AnotherAppWeb do
+        pipe_through :browser
+
+        resources "/posts", PostController
+    end
+    ...
+    end
+
+PIPELINES----------------------------------------------------------------------------------------------
+- A series of plugs that can be attached to specific scopes
+- Routes are defined inside scopes and scopes may pipe through multiple pipelines
+- Once a route matches, Phoenix invokes all plugs defined in all pipelines associated to that route 
+    - For example, accessing "/" will pipe through the :browser pipeline, consequently invoking all of its plugs
+
+|| :browser PIPELINE
+- Prepares for routes which render requests for a browser
+- Has 5 plugs:
+    - 'plug :accepts, ["html"]' which defines the request format or formats which will be accepted
+    - 'plug :fetch_session' which, naturally, fetches the session data and makes it available in the connection
+    - 'plug :fetch_flash' which retrieves any flash messages which may have been set 
+    - 'plug :protect_from_forgery' / ':put_secure_browser_headers' which protect form posts from cross site forgery.
+
+|| :api PIPELINE
+- Prepares for routes which produce data for an api
+- Has 1 plug which is 'plug :accepts, ["json"]'
+ 
+- The router invokes a pipeline on a route defined within a scope
+- Routes outside of a scope have no pipelines
+- Although the use of nested scopes is discouraged, if we call pipe_through within a nested scope, the router will invoke all pipe_through's from parent scopes, followed by the nested one

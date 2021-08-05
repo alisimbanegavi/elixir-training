@@ -1,0 +1,8 @@
+<div class="phx-hero">
+  <h2>Hello World, from <%= @messenger %>!</h2>
+</div>
+
+<%# Our messenger appears as '@messenger'
+We call "assigns" the values passed from the controller to views
+It is a special bit of metaprogrammed syntax which stands in for 'assigns.messenger'
+The result is much nicer on the eyes and much easier to work with in a template %>

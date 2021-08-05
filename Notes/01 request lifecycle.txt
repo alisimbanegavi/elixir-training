@@ -1,0 +1,46 @@
+*** "hello" used as generic example ***
+
+ROUTING------------------------------------------------------------------------------------------------
+- The router maps unique HTTP verb/path pairs to controller/action pairs which will handle them. 
+- Controllers in Phoenix are simply Elixir modules. 
+- Actions are functions that are defined within these controllers.
+
+Ex) Welcome/homepage
+
+> get "/", PageController, :index
+
+* Issues HTTP GET request to root path
+* All requests like this will be handled by the index function in the HelloWeb.PageController module 
+* Index function defined in 'lib/hello_web/controllers/page_controller.ex'
+
+CONTROLLERS----------------------------------------------------------------------------------------------
+- Elixir modules with functions (actions) defined in them
+- Purpose of an action is to gather data and perform any tasks needed for rendering
+
+VIEWS----------------------------------------------------------------------------------------------------
+- Modules responsible for rendering pages
+- In order to add templates to views, we simply need to add files to the lib/hello_web/templates/hello directory
+- Template filename structure: NAME.FORMAT.TEMPLATING_LANGUAGE (i.e. 'index.html.eex')
+- EEx is a library for embedding Elixir that ships as part of Elixir itself
+
+ENDPOINT -> VIEWS-----------------------------------------------------------------------------------------
+- All HTTP requests start in our application endpoint
+- Can find it as a module named HelloWeb.Endpoint in 'lib/hello_web/endpoint.ex'
+- Once you open up the endpoint file, you will see that endpoint has many calls to plug
+- Each Plug defines a slice of request processing/has a specific responsibility (Plug continued in next chapter)
+- Last Plug is HelloWeb.Router, which allows the endpoint to delegate all further request processing to the router
+
+RECAP----------------------------------------------------------------------------------------------------
+endpoint (Phoenix.Endpoint) 
+- The endpoint contains the common and initial path that all requests go through. 
+- If you want something to happen on all requests, it goes to the endpoint
+
+router (Phoenix.Router) 
+- The router is responsible for dispatching verb/path to controllers
+- The router also allows us to scope functionality. For example, some pages in your application may require user authentication, others may not
+
+controller (Phoenix.Controller) 
+- The job of the controller is to retrieve request information, talk to your business domain, and prepare data for the presentation layer
+
+view (Phoenix.View) 
+- The view handles the structured data from the controller and converts it to a presentation to be shown to users
