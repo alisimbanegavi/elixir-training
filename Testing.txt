@@ -1,0 +1,37 @@
+RUNNING TESTS----------------------------------------------------------------------------------------------
+- Elixir ships with a built-in testing framework called ExUnit. ExUnit strives to be clear and explicit, keeping magic to a minimum
+- The test/3 macro receives three arguments:
+    - Test name
+    - Testing context that we are pattern matching on
+    - Contents of the test.
+- When writing tests in Elixir, we use assertions to check that something is true
+
+CONN CASE----------------------------------------------------------------------------------------------
+* EXAMPLE IN 'test/support/conn_case.ex'
+
+VIEW TESTS----------------------------------------------------------------------------------------------
+* EXAMPLE IN test/hello_web/views/error_view_test.exs
+
+TAGS----------------------------------------------------------------------------------------------------
+* EXAMPLE IN hello/test/hello_web/views/error_view_test.exs
+- ExUnit allows us to tag our tests individually or for the whole module 
+- We can then choose to run only the tests with a specific tag, or we can exclude tests with that tag and run everything else
+- Use tags by appending '@moduletag :[tag name]' after 'use ...' statement[s]
+- We can run only the tests from the module we tag by running 'mix test --only [tag name]'
+    - We can also do the opposite by running 'mix test --exclude [tag name]'
+- To tag an individual test, append '@tag [test name]: [test value]' right before the test
+    - We can reuse the test name, but test values attacheed will be different
+    - Can run tags with a specific value using i.e. 'mix test --only individual_test:yup'
+
+RANDOMIZATION----------------------------------------------------------------------------------------------
+- Running tests in random order is a good way to ensure that our tests are truly isolated
+- If a test results in sporadic failures it may be because a previous test changes the state of the system in ways that aren't cleaned up afterward
+- This subsequently affects the tests which follow 
+- Those failures might only present themselves if the tests are run in a specific order
+
+- ExUnit will randomize the order tests run in by default, using an integer to seed the randomization
+- If a specific random seed triggers intermittent failure, we can re-run the tests with that same seed
+- This reliably recreated that test sequence in order to help us figure out what the problem is
+
+CONCURRENCY & PARITIONING-----------------------------------------------------------------------------------
+- ExUnit allows developers to run tests concurrently
