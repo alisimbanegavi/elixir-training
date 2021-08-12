@@ -35,3 +35,4 @@ RANDOMIZATION-------------------------------------------------------------------
 
 CONCURRENCY & PARITIONING-----------------------------------------------------------------------------------
 - ExUnit allows developers to run tests concurrently
+- ExUnit also supports out of the box test partitioning in test environments
