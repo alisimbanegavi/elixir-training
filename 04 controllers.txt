@@ -1,0 +1,243 @@
+CONTROLLERS-------------------------------------------------------------------------------------------
+- Phoenix controllers act as intermediary modules
+- Controller functions (actions) are invoked from the router in reponse to HTTP requests
+- Actions perform necessary processes/data gathering before invoking view to render template OR returning JSON response
+
+- A newly generated Phoenix app has a single controller (PageController)
+
+ACTIONS----------------------------------------------------------------------------------------------
+- Controller actions are functions
+- Must match a route defined in the router
+
+Ex) > get "/", PageController, :index
+    - index is a function defined in PageController
+    - If we want to change this to...
+        i.e. > get "/", PageController, :test
+    - ... then we'd need to change the function name from index to test in PageController:
+
+    defmodule HelloWeb.PageController do
+        use HelloWeb, :controller
+
+        def index(conn, _params) do
+            render(conn, "index.html")
+        end
+    end
+
+
+- Conventions for action names:
+    index - renders a list of all items of the given resource type
+    show - renders an individual item by id
+    new - renders a form for creating a new item
+    create - receives params for one new item and saves it in a datastore
+    edit - retrieves an individual item by id and displays it in a form for editing
+    update - receives params for one edited item and saves it to a datastore
+    delete - receives an id for an item to be deleted and deletes it from a datastore
+Parameters
+- First is always conn (struct which holdes info about request i,e, host, path elements, etc)
+- Second is params (map that holds any parameters passed along in the HTTP request)
+    - Good practice to pattern match against params in the function signature to provide data in a simple package we can pass on to rendering
+    - If an action doesn't need parameter, you can use '_params' to name it
+
+Ex) defmodule HelloWeb.HelloController do
+  ...
+
+  def show(conn, %{"messenger" => messenger}) do
+    render(conn, "show.html", messenger: messenger)
+  end
+end
+
+RENDERING----------------------------------------------------------------------------------------------
+- Several ways for controllers to render content
+- Easiest way is to render some plain text (no HTML) is using Phoenix's text/2 function:
+
+Ex) def show(conn, %{"messenger" => messenger}) do
+        text(conn, "From messenger #{messenger}")
+    end
+    - This will display "From messenger [insert name]" on the page
+
+- Can also render JSON as long as something JSON can recognize (i.e. a map) 
+
+Ex) def show(conn, %{"messenger" => messenger}) do
+        json(conn, %{id: messenger})
+    end
+    - This will output a block of JSON with key 'id' mapped to value '[insert name]'
+
+
+- Phoenix controllers can also render HTML without a view
+Ex) def show(conn, %{"messenger" => messenger}) do
+        html(conn, """
+        <html>
+            <head>
+                <title>Passing a Messenger</title>
+            </head>
+            <body>
+            <p>From messenger #{Plug.HTML.html_escape(messenger)}</p>
+            </body>
+        </html>
+        """)
+    end
+*** String interpolation: #{messenger} becomes #{Plug.HTML.html_escape(messenger)}</p>
+
+Rendering with views
+- When we need to do this, we use the render/3 function
+- Requirements:
+    - Controller and view have same root name
+    - These must have same root name as template directiory where show.html.eex file is stored
+
+- If we need to pass values into a template, we can use Plug.Conn.assign/3 (returns conn)
+
+Ex)  def show(conn, %{"messenger" => messenger}) do
+    conn
+    |> Plug.Conn.assign(:messenger, messenger)
+    |> render("show.html")
+  end
+
+- You can pass in more than one value into a template by connecting assign/3 functions together
+  
+  def show(conn, %{"messenger" => messenger}) do
+    conn
+    |> assign(:messenger, messenger)
+    |> assign(:receiver, "Dweezil")
+    |> render("show.html")
+  end
+
+- View layer is invoked once all assigns are configured
+- View layer render "show.html" alongside the layout and a response is sent to browser
+
+LAYOUTS----------------------------------------------------------------------------------------------
+- A special subset of templates (require a view to be rendered)
+- Contained in 'lib/hello_web/templates/layout'
+- LayoutView module is contained in 'lib/hello_web/views/layout_view.ex'
+
+- The Phoenix.Controller module provides the put_layout/2 function for us to switch layouts
+    - Can accept 'false' as input to disable layouts
+
+Overriding Rendering Formats~~~~~~~~~~~~~~~
+- Phoenix allows us to change formats on the fly with the _format query string parameter
+-  We need to tell our router that it should accept the desired format (text, HTML, JSON)
+- We do that by adding text to the list of accepted formats in the :browser pipeline (in 'lib/hello_web/router.ex')
+- Must change the plug :accepts to include the desired formats
+Ex) Text & HTML:
+
+    defmodule HelloWeb.Router do
+    use HelloWeb, :router
+
+    pipeline :browser do
+        plug :accepts, ["html", "text"]
+        plug :fetch_session
+        plug :protect_from_forgery
+        plug :put_secure_browser_headers
+    end
+    ...
+
+- Also need to tell the controller to render a template with the same format as the one returned by Phoenix.Controller.get_format/1
+- This is done by substituting the name of template "index.html" with :index
+
+def index(conn, _params) do                      def index(conn, _params) do
+  render(conn, "index.html")        ==>            render(conn, :index)
+end                                              end
+
+Sending Direct Responses~~~~~~~~~~~~~~~~~
+- We can create our own rendering options using some of the functions that Plug gives us
+Ex) Send response with a status of 201 and no body
+    - This can be done with the Plug.Conn.send_resp/3 function (used in PageController)
+
+    def index(conn, _params) do
+        conn
+        |> send_resp(201, "")
+    end
+
+    - To specify content type, we use put_resp_content_type/2 with send_resp/3
+
+    def index(conn, _params) do
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(201, "")
+    end
+
+Setting The Content Type~~~~~~~~~~~~~~~~~
+- We can render any sort of format we want by modifying the HTTP Content-Type Header and providing the appropriate template
+Ex) Rendering XML version of 'index' action in PageController
+    
+    def index(conn, _params) do
+        conn
+        |> put_resp_content_type("text/xml")
+        |> render("index.xml", content: some_xml_content)
+    end
+
+    - We would then need to provide an index.xml.eex template which created valid xml, and we would be done.
+
+Setting the HTTP Status~~~~~~~~~~~~~~~~~
+- We can also set the HTTP status code of a response similarly to the way we set the content type
+- Plug.Conn.put_status/2 can be used for this
+- First parameter is conn and second parameter is an integer or name used as an atom for the status code we want to set
+- Provided status code must be a valid number
+Ex) Changing status in index action (PageController)
+
+    def index(conn, _params) do
+        conn
+        |> put_status(202)
+        |> render("index.html")
+    end
+
+REDIRECTION----------------------------------------------------------------------------------------------
+- Often need to redirect to a new url mid-request (i.e. successful 'create' action nusually redirects to 'show' action for a newly created resource)
+- Phoenix's redirect/2 function can be used for this
+- First parameter is conn and second is string respresentating relative path in application
+Ex) Using redirect function to point to index
+
+HelloWeb.Router:
+    ...
+    scope "/", HelloWeb do
+        ...
+        get "/", PageController, :index
+        get "/redirect_test", PageController, :redirect_test
+    end
+
+HelloWeb.PageController:
+    ...
+    def index(conn, _params) do
+        redirect(conn, to: "/redirect_test")
+    end
+
+    def redirect_test(conn, _params) do
+        render(conn, "index.html")
+    end
+    ...
+
+- If we wanted to link to an external page, we could use our redirect function as follows:
+    def index(conn, _params) do
+        redirect(conn, external: "https://elixir-lang.org/")
+    end
+
+FLASH MESSAGES----------------------------------------------------------------------------------------------
+- Sometimes need to communicate with users during the course of an action (i.e. error updating schema)
+- Phoenix.Controller module provides the put_flash/3 and get_flash/2 functions to help us set and retrieve flash messages as a key value pair
+Ex) 
+
+    defmodule HelloWeb.PageController do
+        ...
+        def index(conn, _params) do
+            conn
+            |> put_flash(:info, "Welcome to Phoenix, from flash info!")
+            |> put_flash(:error, "Let's pretend we have an error.")
+            |> render("index.html")
+        end
+    end
+
+    - In order to see our flash messages, we need to be able to retrieve them and display them in a template/layout
+    - One way to do the first part is with get_flash/2 which takes conn and the key we care about, then value for that key is returned
+    - Can also use redirection with this if we want to go to a page with some extra info:
+
+    def index(conn, _params) do
+        conn
+        |> put_flash(:info, "Welcome to Phoenix, from flash info!")
+        |> put_flash(:error, "Let's pretend we have an error.")
+        |> redirect(to: Routes.page_path(conn, :redirect_test))
+    end
+
+- Another function, clear_flash/1, takes only conn and removes any flash messages which might be stored in the session
+
+ACTION FALLBACK----------------------------------------------------------------------------------------------
+- Allows us to centralize error handling code in plugs which are called when a controller action fails to return a %Plug.Conn{} struct
+- These plugs receive both the conn which was originally passed to the controller action along with the return value of the action
